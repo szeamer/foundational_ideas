@@ -1,0 +1,62 @@
+name: Publish site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, so each document's "updated" date is right
+
+      - name: Install LibreOffice and Word-compatible fonts
+        run: |
+          echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | sudo debconf-set-selections
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends \
+            libreoffice-writer fonts-opensymbol ttf-mscorefonts-installer \
+            fonts-crosextra-carlito fonts-crosextra-caladea
+
+      # Makes a PDF for every Word file that doesn't already have one with the
+      # same name. A PDF uploaded by hand always takes priority.
+      - name: Convert Word files to PDF
+        working-directory: documents
+        run: |
+          shopt -s nullglob
+          for f in *.doc *.docx; do
+            pdf="${f%.*}.pdf"
+            if [ -e "$pdf" ]; then
+              echo "Skipping $f (already has $pdf)"
+            else
+              echo "Converting $f"
+              soffice --headless --convert-to pdf --outdir . "$f" || echo "::warning::Could not convert $f"
+            fi
+          done
+
+      - run: python3 build.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
