@@ -4,7 +4,6 @@
 Each document is listed once, titled from its filename. A PDF and a Word
 file with the same name are shown as one entry with two links.
 """
-import datetime
 import html
 import re
 import shutil
@@ -14,8 +13,10 @@ from urllib.parse import quote
 
 # --- Edit these two lines to change the page heading -----------------------
 SITE_TITLE = "Foundational Ideas"
-SITE_INTRO = "Papers and notes."
+SITE_INTRO = "Warwick Zeamer, PhD (McGill University)"
 # ---------------------------------------------------------------------------
+
+SITE_URL = "https://foundationalideas.org/"
 
 ROOT = Path(__file__).resolve().parent
 DOCS = ROOT / "documents"
@@ -41,11 +42,6 @@ def last_updated(path: Path) -> str:
         return ""
 
 
-def nice_date(iso: str) -> str:
-    d = datetime.date.fromisoformat(iso)
-    return f"{d.day} {d:%B %Y}"
-
-
 def collect():
     groups = {}
     for f in sorted(DOCS.iterdir()):
@@ -69,13 +65,19 @@ def render(entries) -> str:
         links = " ".join(
             f'<a class="file" href="{href(f)}">{LINK_LABELS[f.suffix.lower()]}</a>' for f in e["files"]
         )
-        date = f'<span class="date">Updated {nice_date(e["date"])}</span>' if e["date"] else ""
         items.append(
             f'<li><a class="title" href="{href(e["files"][0])}">{html.escape(e["title"])}</a>'
-            f'<div class="meta">{links}{date}</div></li>'
+            f'<div class="meta">{links}</div></li>'
         )
     body = "\n".join(items) if items else '<li class="empty">No documents yet.</li>'
-    return TEMPLATE.format(title=html.escape(SITE_TITLE), intro=html.escape(SITE_INTRO), items=body)
+    return page(f"<ul>\n{body}\n</ul>")
+
+
+def page(content: str, footer: str = "") -> str:
+    return TEMPLATE.format(
+        title=html.escape(SITE_TITLE), intro=html.escape(SITE_INTRO), url=SITE_URL,
+        content=content, footer=f"<footer>{footer}</footer>" if footer else "",
+    )
 
 
 TEMPLATE = """<!doctype html>
@@ -84,6 +86,15 @@ TEMPLATE = """<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title}</title>
+<meta name="description" content="{intro}">
+<link rel="canonical" href="{url}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{title}">
+<meta property="og:description" content="{intro}">
+<meta property="og:url" content="{url}">
+<meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#161514" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext x='16' y='25' text-anchor='middle' font-family='Georgia,serif' font-size='28' fill='%231f1d1a'%3EF%3C/text%3E%3C/svg%3E">
 <style>
   :root {{ --bg: #fbfaf7; --text: #1f1d1a; --muted: #6b665e; --line: #e4e0d8; --link: #2f4f7f; }}
   @media (prefers-color-scheme: dark) {{
@@ -92,26 +103,32 @@ TEMPLATE = """<!doctype html>
   * {{ box-sizing: border-box; }}
   body {{ margin: 0; background: var(--bg); color: var(--text);
          font: 18px/1.6 Georgia, "Times New Roman", serif; }}
-  main {{ max-width: 44rem; margin: 0 auto; padding: 2rem 16px 3rem; }}
-  h1 {{ font-weight: normal; font-size: 2rem; margin: 0 0 .1rem; letter-spacing: .01em; }}
-  .intro {{ color: var(--muted); margin: 0 0 1.25rem; }}
+  main {{ max-width: 44rem; margin: 0 auto; padding: clamp(2rem, 8vw, 4.5rem) 16px 3rem; }}
+  h1 {{ font-weight: normal; font-size: clamp(2rem, 6vw, 2.6rem); line-height: 1.15; margin: 0 0 .35rem;
+        letter-spacing: .005em; }}
+  h1 a {{ color: inherit; text-decoration: none; }}
+  .intro {{ color: var(--muted); margin: 0 0 2.5rem; }}
   ul {{ list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }}
-  li {{ padding: .6rem 0; border-bottom: 1px solid var(--line); }}
-  a {{ color: var(--link); }}
-  .title {{ font-size: 1.25rem; text-decoration: none; color: var(--text); }}
-  .title:hover {{ text-decoration: underline; }}
-  .meta {{ margin-top: .1rem; font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; color: var(--muted);
-           display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; }}
+  li {{ padding: 1rem 0; border-bottom: 1px solid var(--line); }}
+  a {{ color: var(--link); text-underline-offset: .18em; text-decoration-thickness: 1px; }}
+  a:focus-visible {{ outline: 2px solid var(--link); outline-offset: 3px; border-radius: 2px; }}
+  .title {{ font-size: 1.3rem; line-height: 1.35; text-decoration: none; color: var(--text); }}
+  .title:hover {{ color: var(--link); text-decoration: underline; }}
+  .meta {{ margin-top: .3rem; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+           color: var(--muted); display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1.25rem; }}
   .empty {{ color: var(--muted); }}
+  footer {{ margin-top: 2.5rem; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--muted); }}
 </style>
 </head>
 <body>
 <main>
-<h1>{title}</h1>
+<header>
+<h1><a href="/">{title}</a></h1>
 <p class="intro">{intro}</p>
-<ul>
-{items}
-</ul>
+</header>
+{content}
+{footer}
 </main>
 </body>
 </html>
@@ -122,6 +139,8 @@ def main():
     shutil.rmtree(OUT, ignore_errors=True)
     shutil.copytree(DOCS, OUT / "documents", ignore=shutil.ignore_patterns(".*"))
     (OUT / "index.html").write_text(render(collect()), encoding="utf-8")
+    (OUT / "404.html").write_text(
+        page("<p>Page not found.</p>", footer='<a href="/">All documents</a>'), encoding="utf-8")
     print(f"Built {OUT / 'index.html'}")
 
 
